@@ -6,6 +6,7 @@ use crate::{
     crypto::{Cryptographer, EcKeyComponents, LocalKeyPair, RemotePublicKey},
     error::*,
 };
+use base64::Engine;
 use hkdf::Hkdf;
 use lazy_static::lazy_static;
 use openssl::{
@@ -64,7 +65,7 @@ impl fmt::Debug for OpenSSLLocalKeyPair {
         write!(
             f,
             "{:?}",
-            base64::encode_config(&self.ec_key.private_key().to_vec(), base64::URL_SAFE)
+            base64::engine::general_purpose::URL_SAFE.encode(self.ec_key.private_key().to_vec())
         )
     }
 }
@@ -81,9 +82,9 @@ impl OpenSSLLocalKeyPair {
     }
 
     fn from_raw_components(components: &EcKeyComponents) -> Result<Self> {
-        let d = BigNum::from_slice(&components.private_key())?;
+        let d = BigNum::from_slice(components.private_key())?;
         let mut bn_ctx = BigNumContext::new()?;
-        let ec_point = EcPoint::from_bytes(&GROUP_P256, &components.public_key(), &mut bn_ctx)?;
+        let ec_point = EcPoint::from_bytes(&GROUP_P256, components.public_key(), &mut bn_ctx)?;
         let mut x = BigNum::new()?;
         let mut y = BigNum::new()?;
         ec_point.affine_coordinates_gfp(&GROUP_P256, &mut x, &mut y, &mut bn_ctx)?;
@@ -159,9 +160,9 @@ impl Cryptographer for OpensslCryptographer {
     }
 
     fn hkdf_sha256(&self, salt: &[u8], secret: &[u8], info: &[u8], len: usize) -> Result<Vec<u8>> {
-        let (_, hk) = Hkdf::<Sha256>::extract(Some(&salt[..]), &secret);
+        let (_, hk) = Hkdf::<Sha256>::extract(Some(salt), secret);
         let mut okm = vec![0u8; len];
-        hk.expand(&info, &mut okm).unwrap();
+        hk.expand(info, &mut okm).unwrap();
         Ok(okm)
     }
 
